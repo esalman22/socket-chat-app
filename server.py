@@ -1,61 +1,64 @@
 import socket
 import threading
+import os
 
-# إنشاء السيرفر
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-# السماح بأي جهاز يتصل
-server_socket.bind(('0.0.0.0', 50000))
+port = int(os.environ.get("PORT", 50000))
+server_socket.bind(('0.0.0.0', port))
 
 server_socket.listen()
 
-print("Server is running and waiting for connections...")
+print("Server is running...")
 
-clients = []
+clients = {}  # conn -> username
 
 
-# إرسال رسالة لكل العملاء
-def broadcast(message, sender_conn):
-    for client in clients:
+def broadcast(message, sender_conn=None):
+    for client in list(clients):
         if client != sender_conn:
             try:
                 client.send(message)
             except:
-                clients.remove(client)
+                client.close()
+                del clients[client]
 
 
-# التعامل مع كل عميل
 def handle_client(conn, addr):
-    print(f"New connection from {addr}")
+    try:
+        # أول رسالة = username
+        username = conn.recv(1024).decode()
+        clients[conn] = username
 
-    while True:
-        try:
+        print(f"{username} joined from {addr}")
+
+        broadcast(f"{username} joined the chat".encode(), conn)
+
+        while True:
             data = conn.recv(1024)
-
             if not data:
                 break
 
-            message = f"{addr}: {data.decode()}".encode()
+            message = f"{username}: {data.decode()}"
+            print(message)
 
-            print(message.decode())
+            broadcast(message.encode(), conn)
 
-            broadcast(message, conn)
+    except:
+        pass
 
-        except:
-            break
+    finally:
+        if conn in clients:
+            name = clients[conn]
+            del clients[conn]
+            broadcast(f"{name} left the chat".encode(), conn)
 
-    print(f"Client disconnected: {addr}")
-    clients.remove(conn)
-    conn.close()
+        conn.close()
 
 
-# قبول الاتصالات
 def accept_connections():
     while True:
         conn, addr = server_socket.accept()
-
-        clients.append(conn)
-
         thread = threading.Thread(target=handle_client, args=(conn, addr))
         thread.start()
 
