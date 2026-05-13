@@ -31,39 +31,10 @@ def receive_messages():
         except:
             break
 
-# UI
-root = tk.Tk()
-root.title("Chat Server")
-
-chat_box = scrolledtext.ScrolledText(root, width=50, height=20)
-chat_box.pack()
-# منع الكتابة داخل الشات
-chat_box.config(state='disabled')
-
-entry = tk.Entry(root, width=40)
-entry.pack(side=tk.LEFT, padx=5, pady=5)
-
-# إرسال بالـ Enter
-entry.bind("<Return>", lambda event: send_message())
-
-send_button = tk.Button(root, text="Send", command=send_message)
-send_button.pack(side=tk.LEFT)
 
 # Thread للاستقبال
 receive_thread = threading.Thread(target=receive_messages, daemon=True)
 receive_thread.start()
 
-# غلق البرنامج
-def on_closing():
 
-    conn.close()
-
-    server_socket.close()
-
-    root.destroy()
-
-root.protocol("WM_DELETE_WINDOW", on_closing)
-
-
-root.mainloop()
 
