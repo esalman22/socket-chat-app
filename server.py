@@ -14,14 +14,13 @@ print("Server is running...")
 clients = {}  # conn -> username
 
 
-def broadcast(message, sender_conn=None):
+def broadcast(message):
     for client in list(clients):
-        if client != sender_conn:
-            try:
-                client.send(message)
-            except:
-                client.close()
-                del clients[client]
+        try:
+            client.send(message)
+        except:
+            client.close()
+            clients.remove(client)
 
 
 def handle_client(conn, addr):
@@ -32,7 +31,7 @@ def handle_client(conn, addr):
 
         print(f"{username} joined from {addr}")
 
-        broadcast(f"{username} joined the chat".encode(), conn)
+        broadcast(f"{username} joined the chat".encode())
 
         while True:
             data = conn.recv(1024)
@@ -42,7 +41,7 @@ def handle_client(conn, addr):
             message = f"{username}: {data.decode()}"
             print(message)
 
-            broadcast(message.encode(), conn)
+            broadcast(message.encode())
 
     except:
         pass
@@ -51,7 +50,7 @@ def handle_client(conn, addr):
         if conn in clients:
             name = clients[conn]
             del clients[conn]
-            broadcast(f"{name} left the chat".encode(), conn)
+            broadcast(f"{name} left the chat".encode())
 
         conn.close()
 
