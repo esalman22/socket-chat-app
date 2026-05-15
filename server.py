@@ -3,76 +3,55 @@ import threading
 import os
 import time
 
-#================ SERVER =================#
+# ================= SERVER ================= #
 
-try:
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    save_folder = "received_files"
+port = int(os.environ.get("PORT", 50000))
 
-    os.makedirs(save_folder, exist_ok=True)
+server_socket.bind(("0.0.0.0", port))
+server_socket.listen()
 
-    file_name = header.split(":")[1]
+print("Server is running...")
 
-    timestamp = str(int(time.time()))
+clients = {}
 
-    name = os.path.splitext(file_name)[0]
-    ext = os.path.splitext(file_name)[1]
+END_MARK = b"<END>"
 
-    new_name = f"{name}_{timestamp}{ext}"
 
-    save_path = os.path.join(save_folder, new_name)
-
-    with open(save_path, "wb") as f:
-        f.write(file_data)
-
-    print("Saved:", save_path)
-
-except Exception as e:
-
-    print("Error:", e)
-
-    continue
-    broadcast(
-                    f"{username} sent {new_name}".encode(),
-                    conn
-                )
-
-#================ BROADCAST =================#
+# ================= BROADCAST ================= #
 
 def broadcast(message, sender=None):
-
     for client in list(clients):
 
         if client != sender:
-
             try:
                 client.send(message)
 
             except:
-
                 client.close()
 
                 if client in clients:
                     del clients[client]
 
-#================ HANDLE CLIENT =================#
+
+# ================= HANDLE CLIENT ================= #
 
 def handle_client(conn, addr):
 
     try:
-
-        #========== USERNAME ==========#
-
+        # ===== USERNAME ===== #
         username = conn.recv(1024).decode()
 
         clients[conn] = username
 
         print(f"{username} joined from {addr}")
 
-        broadcast(f"{username} joined the chat".encode())
+        broadcast(
+            f"{username} joined the chat".encode()
+        )
 
-        #========== LOOP ==========#
-
+        # ===== MAIN LOOP ===== #
         while True:
 
             data = conn.recv(1024)
@@ -80,11 +59,12 @@ def handle_client(conn, addr):
             if not data:
                 break
 
-            #================ FILES =================#
-
-            if data.startswith(b"IMAGE:") or \
-               data.startswith(b"VIDEO:") or \
-               data.startswith(b"FILE:"):
+            # ================= FILES ================= #
+            if (
+                data.startswith(b"IMAGE:")
+                or data.startswith(b"VIDEO:")
+                or data.startswith(b"FILE:")
+            ):
 
                 header = data.decode()
 
@@ -93,61 +73,78 @@ def handle_client(conn, addr):
                 file_data = b""
 
                 while True:
-
                     chunk = conn.recv(4096)
 
-                    # END MARK FOUND
                     if END_MARK in chunk:
-
                         file_data += chunk.replace(
                             END_MARK,
                             b""
                         )
-
                         break
 
                     file_data += chunk
 
-                #================ SAVE FILE =================#
-
-try:
-    save_folder = "received_files"
-
-    os.makedirs(save_folder, exist_ok=True)
-
-    file_name = header.split(":")[1]
-
-    timestamp = str(int(time.time()))
-
-    name = os.path.splitext(file_name)[0]
-    ext = os.path.splitext(file_name)[1]
-
-    new_name = f"{name}_{timestamp}{ext}"
-
-    save_path = os.path.join(save_folder, new_name)
-
-    with open(save_path, "wb") as f:
-        f.write(file_data)
-
-    print("Saved:", save_path)
-
-except Exception as e:
-    print("Error:", e)
-
-                #================ BROADCAST =================#
-
-                broadcast(
-                    f"{username} sent {new_name}".encode(),
-                    conn
-                )
-
-            #================ TEXT =================#
-
-            else:
-
+                # ===== SAVE FILE ===== #
                 try:
+                    save_folder = "received_files"
 
-                    message = f"{username}: {data.decode()}"
+                    os.makedirs(
+                        save_folder,
+                        exist_ok=True
+                    )
+
+                    file_name = header.split(":")[1].strip()
+
+                    timestamp = str(
+                        int(time.time())
+                    )
+
+                    name = os.path.splitext(
+                        file_name
+                    )[0]
+
+                    ext = os.path.splitext(
+                        file_name
+                    )[1]
+
+                    new_name = (
+                        f"{name}_{timestamp}{ext}"
+                    )
+
+                    save_path = os.path.join(
+                        save_folder,
+                        new_name
+                    )
+
+                    with open(
+                        save_path,
+                        "wb"
+                    ) as f:
+                        f.write(file_data)
+
+                    print(
+                        "Saved:",
+                        save_path
+                    )
+
+                    broadcast(
+                        f"{username} sent {new_name}".encode(),
+                        conn
+                    )
+
+                except Exception as e:
+                    print(
+                        "File save error:",
+                        e
+                    )
+
+            # ================= TEXT ================= #
+            else:
+                try:
+                    message = (
+                        f"{username}: "
+                        f"{data.decode()}"
+                    )
 
                     print(message)
 
@@ -157,17 +154,13 @@ except Exception as e:
                     )
 
                 except:
-
                     print("Decode error")
 
     except Exception as e:
-
         print("ERROR:", e)
 
     finally:
-
         if conn in clients:
-
             name = clients[conn]
 
             del clients[conn]
@@ -178,12 +171,12 @@ except Exception as e:
 
         conn.close()
 
-#================ ACCEPT =================#
+
+# ================= ACCEPT ================= #
 
 def accept_connections():
 
     while True:
-
         conn, addr = server_socket.accept()
 
         thread = threading.Thread(
@@ -192,9 +185,9 @@ def accept_connections():
         )
 
         thread.daemon = True
-
         thread.start()
 
-#================ START =================#
+
+# ================= START ================= #
 
 accept_connections()
