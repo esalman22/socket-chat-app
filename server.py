@@ -1,4 +1,3 @@
-```python
 import socket
 import threading
 import os
@@ -243,4 +242,4 @@ def accept_connections():
 # ================= START ================= #
 
 accept_connections()
-```
+
