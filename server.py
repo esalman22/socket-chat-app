@@ -1,205 +1,201 @@
+```python
+# server.py
+
 import socket
 import threading
 import os
-import time
+
+# ================= CONFIG ================= #
+
+HOST = "0.0.0.0"
+
+PORT = int(
+    os.environ.get("PORT", 18729)
+)
+
+BUFFER_SIZE = 4096
+
+EOF_MARKER = b"<END_OF_MEDIA_CUSTOM_PROTOCOL_999>"
 
 # ================= SERVER ================= #
 
-server_socket = socket.socket(
+server = socket.socket(
     socket.AF_INET,
     socket.SOCK_STREAM
 )
 
-port = int(
-    os.environ.get("PORT", 50000)
+server.bind((HOST, PORT))
+
+server.listen()
+
+print(f"Server running on port {PORT}...")
+
+clients = []
+
+# ================= SAVE FOLDER ================= #
+
+RECEIVED_FOLDER = "received_files"
+
+os.makedirs(
+    RECEIVED_FOLDER,
+    exist_ok=True
 )
-
-server_socket.bind(
-    ("0.0.0.0", port)
-)
-
-server_socket.listen()
-
-print(f"Server running on {port}...")
-
-clients = {}
-
-END_MARK = b"<END>"
-
-HEADER_END = b"<HEADER_END>"
 
 # ================= BROADCAST ================= #
 
-def broadcast(message, sender=None):
+def broadcast(data, sender=None):
 
-    for client in list(clients):
+    for client in clients[:]:
 
         if client != sender:
 
             try:
 
-                client.send(message)
+                client.sendall(data)
 
             except:
 
-                client.close()
+                try:
+                    client.close()
+                except:
+                    pass
 
                 if client in clients:
-                    del clients[client]
+                    clients.remove(client)
 
 # ================= HANDLE CLIENT ================= #
 
 def handle_client(conn, addr):
 
+    print(f"Client connected: {addr}")
+
+    buffer = b""
+
     try:
-
-        username = conn.recv(
-            1024
-        ).decode()
-
-        clients[conn] = username
-
-        print(
-            f"{username} joined from {addr}"
-        )
-
-        broadcast(
-            f"{username} joined the chat".encode()
-        )
 
         while True:
 
-            # ================= RECEIVE HEADER ================= #
+            data = conn.recv(BUFFER_SIZE)
 
-            data = b""
+            if not data:
+                break
 
-            while HEADER_END not in data:
+            buffer += data
 
-                chunk = conn.recv(1024)
+            while EOF_MARKER in buffer:
 
-                if not chunk:
-                    return
+                message_bytes, buffer = buffer.split(
+                    EOF_MARKER,
+                    1
+                )
 
-                data += chunk
+                # ================= TEXT ================= #
 
-                # NORMAL TEXT MESSAGE
-                if (
-                    b"IMAGE:" not in data and
-                    b"VIDEO:" not in data and
-                    b"FILE:" not in data
+                if message_bytes.startswith(b"TEXT:"):
+
+                    print(
+                        "TEXT:",
+                        message_bytes[:100]
+                    )
+
+                    broadcast(
+                        message_bytes + EOF_MARKER,
+                        conn
+                    )
+
+                # ================= IMAGE ================= #
+
+                elif (
+                    message_bytes.startswith(b"IMAGE:")
+                    or
+                    message_bytes.startswith(b"IMAGE_HD:")
                 ):
 
                     try:
 
-                        message = (
-                            f"{username}: "
-                            f"{data.decode()}"
+                        parts = message_bytes.split(
+                            b":",
+                            2
                         )
 
-                        print(message)
+                        msg_type = parts[0].decode()
 
-                        broadcast(
-                            message.encode(),
-                            conn
+                        filename = parts[1].decode()
+
+                        file_data = parts[2]
+
+                        save_path = os.path.join(
+                            RECEIVED_FOLDER,
+                            filename
                         )
 
-                    except:
+                        with open(
+                            save_path,
+                            "wb"
+                        ) as f:
 
-                        print("Decode Error")
+                            f.write(file_data)
 
-                    data = b""
-                    break
+                        print(
+                            f"{msg_type} saved:",
+                            save_path
+                        )
 
-            if not data:
-                continue
+                    except Exception as e:
 
-            # ================= SPLIT HEADER ================= #
+                        print(
+                            "Image Save Error:",
+                            e
+                        )
 
-            header_data, remaining = data.split(
-                HEADER_END,
-                1
-            )
-
-            header = header_data.decode()
-
-            print("Receiving:", header)
-
-            # ================= RECEIVE FILE ================= #
-
-            file_data = remaining
-
-            while True:
-
-                chunk = conn.recv(4096)
-
-                if END_MARK in chunk:
-
-                    file_data += chunk.replace(
-                        END_MARK,
-                        b""
+                    broadcast(
+                        message_bytes + EOF_MARKER,
+                        conn
                     )
 
-                    break
+                # ================= FILE ================= #
 
-                file_data += chunk
+                elif message_bytes.startswith(b"FILE:"):
 
-            # ================= SAVE FILE ================= #
+                    try:
 
-            try:
+                        parts = message_bytes.split(
+                            b":",
+                            2
+                        )
 
-                save_folder = "received_files"
+                        filename = parts[1].decode()
 
-                os.makedirs(
-                    save_folder,
-                    exist_ok=True
-                )
+                        file_data = parts[2]
 
-                file_name = header.split(":")[1]
+                        save_path = os.path.join(
+                            RECEIVED_FOLDER,
+                            filename
+                        )
 
-                timestamp = str(
-                    int(time.time())
-                )
+                        with open(
+                            save_path,
+                            "wb"
+                        ) as f:
 
-                name = os.path.splitext(
-                    file_name
-                )[0]
+                            f.write(file_data)
 
-                ext = os.path.splitext(
-                    file_name
-                )[1]
+                        print(
+                            "FILE saved:",
+                            save_path
+                        )
 
-                new_name = (
-                    f"{name}_{timestamp}{ext}"
-                )
+                    except Exception as e:
 
-                save_path = os.path.join(
-                    save_folder,
-                    new_name
-                )
+                        print(
+                            "File Save Error:",
+                            e
+                        )
 
-                with open(
-                    save_path,
-                    "wb"
-                ) as f:
-
-                    f.write(file_data)
-
-                print(
-                    "Saved:",
-                    save_path
-                )
-
-                broadcast(
-                    f"{username} sent {new_name}".encode(),
-                    conn
-                )
-
-            except Exception as e:
-
-                print(
-                    "Save Error:",
-                    e
-                )
+                    broadcast(
+                        message_bytes + EOF_MARKER,
+                        conn
+                    )
 
     except Exception as e:
 
@@ -210,25 +206,27 @@ def handle_client(conn, addr):
 
     finally:
 
+        print(
+            f"Client disconnected: {addr}"
+        )
+
         if conn in clients:
+            clients.remove(conn)
 
-            name = clients[conn]
+        try:
+            conn.close()
+        except:
+            pass
 
-            del clients[conn]
+# ================= ACCEPT CLIENTS ================= #
 
-            broadcast(
-                f"{name} left the chat".encode()
-            )
-
-        conn.close()
-
-# ================= ACCEPT ================= #
-
-def accept_connections():
+def accept_clients():
 
     while True:
 
-        conn, addr = server_socket.accept()
+        conn, addr = server.accept()
+
+        clients.append(conn)
 
         thread = threading.Thread(
             target=handle_client,
@@ -241,5 +239,5 @@ def accept_connections():
 
 # ================= START ================= #
 
-accept_connections()
-
+accept_clients()
+```
