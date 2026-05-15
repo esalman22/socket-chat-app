@@ -92,28 +92,29 @@ def handle_client(conn, addr):
 
                 #================ SAVE FILE =================#
 
-                save_folder = "received_files"
+try:
+    save_folder = "received_files"
 
-                os.makedirs(save_folder, exist_ok=True)
+    os.makedirs(save_folder, exist_ok=True)
 
-                file_name = header.split(":")[1]
+    file_name = header.split(":")[1]
 
-                timestamp = str(int(time.time()))
+    timestamp = str(int(time.time()))
 
-                name = os.path.splitext(file_name)[0]
-                ext = os.path.splitext(file_name)[1]
+    name = os.path.splitext(file_name)[0]
+    ext = os.path.splitext(file_name)[1]
 
-                new_name = f"{name}_{timestamp}{ext}"
+    new_name = f"{name}_{timestamp}{ext}"
 
-                save_path = os.path.join(
-                    save_folder,
-                    new_name
-                )
+    save_path = os.path.join(save_folder, new_name)
 
-                with open(save_path, "wb") as f:
-                    f.write(file_data)
+    with open(save_path, "wb") as f:
+        f.write(file_data)
 
-                print("Saved:", save_path)
+    print("Saved:", save_path)
+
+except Exception as e:
+    print("Error:", e)
 
                 #================ BROADCAST =================#
 
