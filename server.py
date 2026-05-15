@@ -1,8 +1,9 @@
 import socket
 import threading
-import os
 
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
 server_socket.bind(("0.0.0.0", 18729))
 server_socket.listen()
 
@@ -16,13 +17,13 @@ END_MARK = b"<END>"
 
 def broadcast(data, sender=None):
     for c in list(clients):
-        if c != sender:
-            try:
+        try:
+            if c != sender:
                 c.send(data)
-            except:
-                c.close()
-                if c in clients:
-                    del clients[c]
+        except:
+            c.close()
+            if c in clients:
+                del clients[c]
 
 #================ HANDLE CLIENT =================#
 
@@ -32,23 +33,31 @@ def handle_client(conn, addr):
         username = conn.recv(1024).decode()
         clients[conn] = username
 
-        print(username, "connected")
+        print(f"{username} connected from {addr}")
 
         while True:
 
-            header = conn.recv(1024)
+            data = conn.recv(1024)
 
-            if not header:
+            if not data:
                 break
 
-            #================ IMAGE / FILE =================#
+            #================ TEXT =================#
 
-            if header.startswith(b"IMAGE:") or header.startswith(b"FILE:") or header.startswith(b"VIDEO:"):
+            if data.startswith(b"TEXT:"):
+                broadcast(data, conn)
 
-                broadcast(header)  # ابعت النوع لكل الناس
+            #================ IMAGE / FILE / VIDEO =================#
+
+            elif data.startswith(b"IMAGE:") or data.startswith(b"FILE:") or data.startswith(b"VIDEO:"):
+
+                header = data  # مهم جدًا
+
+                broadcast(header, conn)
 
                 file_data = b""
 
+                # استقبال الملف كامل
                 while True:
                     chunk = conn.recv(4096)
 
@@ -58,32 +67,32 @@ def handle_client(conn, addr):
 
                     file_data += chunk
 
-                # ابعت الملف لكل الناس
-                broadcast(file_data)
-
-                # نهاية الملف
-                broadcast(END_MARK)
-
-            #================ TEXT =================#
+                # إرسال الملف لكل العملاء
+                for c in list(clients):
+                    try:
+                        if c != conn:
+                            c.send(file_data)
+                            c.send(END_MARK)
+                    except:
+                        c.close()
+                        if c in clients:
+                            del clients[c]
 
             else:
-
-                try:
-                    msg = f"{username}: {header.decode()}"
-                    broadcast(msg.encode(), conn)
-
-                except:
-                    pass
+                # fallback لأي نص عادي
+                broadcast(data, conn)
 
     except:
         pass
 
     finally:
-        conn.close()
         if conn in clients:
+            print(clients[conn], "disconnected")
             del clients[conn]
 
-#================ ACCEPT =================#
+        conn.close()
+
+#================ ACCEPT CONNECTIONS =================#
 
 while True:
     conn, addr = server_socket.accept()
