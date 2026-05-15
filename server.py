@@ -1,4 +1,4 @@
-```python
+
 # server.py
 
 import socket
@@ -240,4 +240,4 @@ def accept_clients():
 # ================= START ================= #
 
 accept_clients()
-```
+
