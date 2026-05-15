@@ -5,19 +5,37 @@ import time
 
 #================ SERVER =================#
 
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+try:
 
-port = int(os.environ.get("PORT", 50000))
+    save_folder = "received_files"
 
-server_socket.bind(('0.0.0.0', port))
+    os.makedirs(save_folder, exist_ok=True)
 
-server_socket.listen()
+    file_name = header.split(":")[1]
 
-print("Server is running...")
+    timestamp = str(int(time.time()))
 
-clients = {}
+    name = os.path.splitext(file_name)[0]
+    ext = os.path.splitext(file_name)[1]
 
-END_MARK = b"<END>"
+    new_name = f"{name}_{timestamp}{ext}"
+
+    save_path = os.path.join(save_folder, new_name)
+
+    with open(save_path, "wb") as f:
+        f.write(file_data)
+
+    print("Saved:", save_path)
+
+except Exception as e:
+
+    print("Error:", e)
+
+    continue
+    broadcast(
+                    f"{username} sent {new_name}".encode(),
+                    conn
+                )
 
 #================ BROADCAST =================#
 
